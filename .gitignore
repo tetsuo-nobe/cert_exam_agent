@@ -41,32 +41,33 @@ examAgent/agentcore/cdk/dist/
 examAgent/agentcore/cdk/.cdk.staging/
 
 # --- Python (app/MyAgent) ---
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+# examAgent/ 配下に限定する(frontend/src/lib/ など他プロジェクトの同名フォルダと衝突させないため)
+examAgent/**/__pycache__/
+examAgent/**/*.py[cod]
+examAgent/**/*$py.class
+examAgent/**/*.so
+examAgent/**/.Python
+examAgent/**/build/
+examAgent/**/develop-eggs/
+examAgent/**/dist/
+examAgent/**/downloads/
+examAgent/**/eggs/
+examAgent/**/.eggs/
+examAgent/**/lib/
+examAgent/**/lib64/
+examAgent/**/parts/
+examAgent/**/sdist/
+examAgent/**/var/
+examAgent/**/wheels/
+examAgent/**/*.egg-info/
+examAgent/**/.installed.cfg
+examAgent/**/*.egg
 
 # Virtual environments
-.venv/
-venv/
-ENV/
-env/
+examAgent/**/.venv/
+examAgent/**/venv/
+examAgent/**/ENV/
+examAgent/**/env/
 
 # =============================================================================
 # frontend/ (Next.js)
