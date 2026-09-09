@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.agentcore.aws.dev/v1/agentcore.json",
+  "name": "examAgent",
+  "version": 1,
+  "managedBy": "CDK",
+  "tags": {
+    "agentcore:created-by": "agentcore-cli",
+    "agentcore:project-name": "examAgent"
+  },
+  "runtimes": [
+    {
+      "name": "MyAgent",
+      "build": "CodeZip",
+      "entrypoint": "main.py",
+      "codeLocation": "app/MyAgent/",
+      "runtimeVersion": "PYTHON_3_14",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP",
+      "envVars": [
+        {
+          "name": "EXAM_RESERVATION_BUCKET",
+          "value": "exam-agent-reservations-068048081706-us-east-1"
+        }
+      ],
+      "requestHeaderAllowlist": ["Authorization"],
+      "authorizerType": "CUSTOM_JWT",
+      "authorizerConfiguration": {
+        "customJwtAuthorizer": {
+          "discoveryUrl": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_dGDNZtmOT/.well-known/openid-configuration",
+          "allowedAudience": ["4q7gnqoipo1mkc8ut6r8ane71u"]
+        }
+      },
+      "additionalPolicies": [
+        "arn:aws:iam::068048081706:policy/exam-agent-reservation-bucket-access"
+      ]
+    }
+  ],
+  "memories": [
+    {
+      "name": "MyAgentMemory",
+      "eventExpiryDuration": 30,
+      "strategies": []
+    }
+  ],
+  "knowledgeBases": [],
+  "credentials": [],
+  "evaluators": [],
+  "onlineEvalConfigs": [],
+  "agentCoreGateways": [],
+  "policyEngines": [],
+  "configBundles": [],
+  "abTests": [],
+  "harnesses": [],
+  "datasets": [],
+  "payments": []
+}

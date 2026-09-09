@@ -1,0 +1,23 @@
+{
+  "targets": {
+    "default": {
+      "resources": {
+        "runtimes": {
+          "MyAgent": {
+            "runtimeId": "examAgent_MyAgent-IPu1NC5eIp",
+            "runtimeArn": "arn:aws:bedrock-agentcore:us-east-1:068048081706:runtime/examAgent_MyAgent-IPu1NC5eIp",
+            "roleArn": "arn:aws:iam::068048081706:role/AgentCore-examAgent-defau-ApplicationAgentMyAgentRu-TzNOfAerdAD4"
+          }
+        },
+        "memories": {
+          "MyAgentMemory": {
+            "memoryId": "examAgent_MyAgentMemory-ZdAJQ8FJ9G",
+            "memoryArn": "arn:aws:bedrock-agentcore:us-east-1:068048081706:memory/examAgent_MyAgentMemory-ZdAJQ8FJ9G"
+          }
+        },
+        "stackName": "AgentCore-examAgent-default",
+        "deployHash": "4ecdcfc36941a9f0"
+      }
+    }
+  }
+}

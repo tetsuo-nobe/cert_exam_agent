@@ -1,0 +1,169 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Backend resources for the exam reservation agent.
+  - S3 bucket that stores the exam reservation confirmation PDFs
+  - Cognito User Pool / User Pool Client for sign-in (Amplify UI + SRP)
+  Exposes the discovery URL / client id used by AgentCore Runtime Inbound Auth (JWT) as stack Outputs.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: exam-agent
+    Description: Prefix used for resource names.
+    AllowedPattern: "^[a-z][a-z0-9-]{1,30}$"
+    ConstraintDescription: Must start with a lowercase letter and contain only lowercase letters, digits, and hyphens (2-31 chars).
+
+  PdfExpirationDays:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    MaxValue: 365
+    Description: Number of days after which stored reservation PDFs are automatically deleted.
+
+Resources:
+  # ---------------------------------------------------------------------------
+  # S3 bucket that stores the exam reservation confirmation PDFs
+  # ---------------------------------------------------------------------------
+  ReservationBucket:
+    Type: AWS::S3::Bucket
+    # Demo setup: delete the bucket together with the stack for easy teardown/recreate.
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub "${ProjectName}-reservations-${AWS::AccountId}-${AWS::Region}"
+      # Block all public access (PDFs are only accessible via presigned URLs)
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      # Automatically delete PDFs after the configured retention period
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireReservationPdfs
+            Status: Enabled
+            Prefix: reservations/
+            ExpirationInDays: !Ref PdfExpirationDays
+
+  # ---------------------------------------------------------------------------
+  # Cognito User Pool for sign-in
+  # ---------------------------------------------------------------------------
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${ProjectName}-user-pool"
+      # Allow sign-in with an email address
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      MfaConfiguration: "OFF"
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireUppercase: true
+          RequireSymbols: false
+      # Keep the display name (name) as the exam candidate name
+      Schema:
+        - Name: name
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+        - Name: email
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+
+  # ---------------------------------------------------------------------------
+  # User Pool Client for the frontend (SPA)
+  #   - No client secret (public client)
+  #   - Amplify UI + SRP authentication (Hosted UI / OAuth redirect is not used)
+  # ---------------------------------------------------------------------------
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${ProjectName}-web-client"
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+      PreventUserExistenceErrors: ENABLED
+      # Token validity
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      RefreshTokenValidity: 30
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+
+  # ---------------------------------------------------------------------------
+  # IAM managed policy granting the agent access to reservation PDFs in S3.
+  # Attach its ARN to the AgentCore Runtime execution role via agentcore.json
+  # (runtime additionalPolicies).
+  # ---------------------------------------------------------------------------
+  ReservationBucketAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "${ProjectName}-reservation-bucket-access"
+      Description: Allows the exam reservation agent to put and get reservation PDFs in the S3 bucket.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowReservationObjectAccess
+            Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+            Resource: !Sub "${ReservationBucket.Arn}/reservations/*"
+
+Outputs:
+  ReservationBucketName:
+    Description: Name of the S3 bucket that stores reservation PDFs (set as the agent env var EXAM_RESERVATION_BUCKET).
+    Value: !Ref ReservationBucket
+    Export:
+      Name: !Sub "${ProjectName}-ReservationBucketName"
+
+  UserPoolId:
+    Description: Cognito User Pool ID.
+    Value: !Ref UserPool
+    Export:
+      Name: !Sub "${ProjectName}-UserPoolId"
+
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID (set as AgentCore Inbound Auth allowedClients / allowedAudience).
+    Value: !Ref UserPoolClient
+    Export:
+      Name: !Sub "${ProjectName}-UserPoolClientId"
+
+  CognitoDiscoveryUrl:
+    Description: OIDC discovery URL to configure for AgentCore Runtime Inbound Auth (JWT).
+    Value: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}/.well-known/openid-configuration"
+    Export:
+      Name: !Sub "${ProjectName}-CognitoDiscoveryUrl"
+
+  CognitoIssuerUrl:
+    Description: Cognito issuer URL.
+    Value: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}"
+
+  ReservationBucketAccessPolicyArn:
+    Description: Managed policy ARN to attach to the AgentCore Runtime execution role (agentcore.json additionalPolicies).
+    Value: !Ref ReservationBucketAccessPolicy
+    Export:
+      Name: !Sub "${ProjectName}-ReservationBucketAccessPolicyArn"
+
+  Region:
+    Description: AWS region where the resources are deployed.
+    Value: !Ref AWS::Region

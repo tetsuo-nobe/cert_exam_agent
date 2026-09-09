@@ -1,0 +1,106 @@
+# =============================================================================
+# cert_exam_agent モノリポ用 .gitignore
+# (backend: AWS SAM / examAgent: AgentCore + Python / frontend: Next.js)
+# =============================================================================
+
+# --- Secrets / environment files -------------------------------------------
+.env
+.env.*
+!.env.*.example
+*.pem
+
+# --- OS ----------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+
+# --- IDE / editors -------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# =============================================================================
+# backend/ (AWS SAM)
+# =============================================================================
+backend/.aws-sam/
+
+# =============================================================================
+# examAgent/ (AgentCore project)
+# =============================================================================
+
+# agentcore CLI internals (deployed-state.json はコミットする)
+examAgent/agentcore/.cli/*
+!examAgent/agentcore/.cli/deployed-state.json
+examAgent/agentcore/.cache/*
+
+# CDK
+examAgent/agentcore/cdk/cdk.out/
+examAgent/agentcore/cdk/node_modules/
+examAgent/agentcore/cdk/dist/
+examAgent/agentcore/cdk/.cdk.staging/
+
+# --- Python (app/MyAgent) ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# =============================================================================
+# frontend/ (Next.js)
+# =============================================================================
+
+# dependencies
+frontend/node_modules/
+frontend/.pnp
+frontend/.pnp.*
+frontend/.yarn/*
+!frontend/.yarn/patches
+!frontend/.yarn/plugins
+!frontend/.yarn/releases
+!frontend/.yarn/versions
+
+# testing
+frontend/coverage/
+
+# next.js
+frontend/.next/
+frontend/out/
+
+# production
+frontend/build/
+
+# debug logs
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnpm-debug.log*
+
+# vercel
+frontend/.vercel
+
+# typescript
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts

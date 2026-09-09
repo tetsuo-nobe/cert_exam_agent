@@ -1,0 +1,15 @@
+version = 0.1
+
+[default.global.parameters]
+stack_name = "exam-agent-backend"
+region = "us-east-1"
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_NAMED_IAM"
+confirm_changeset = true
+resolve_s3 = true
+# Example parameter overrides:
+# parameter_overrides = "ProjectName=exam-agent PdfExpirationDays=30"
+s3_prefix = "exam-agent-backend"
+parameter_overrides = "ProjectName=\"exam-agent\" PdfExpirationDays=\"30\""
+image_repositories = []
