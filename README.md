@@ -24,6 +24,8 @@ flowchart TD
     Frontend["frontend (Vite+React, 静的サイト)<br/>Authenticator (SRP)"]
     Cognito["Cognito User Pool<br/>(backend/template.yaml)"]
     Runtime["AgentCore Runtime<br/>(examAgent/app/MyAgent)<br/>Inbound Auth: JWT / CORS対応"]
+    ToolVenues["list_venues<br/>会場一覧取得 (デモ: ハードコード3件)"]
+    ToolExams["list_exams<br/>試験一覧取得 (デモ: ハードコード8件)"]
     ToolCheck["check_availability<br/>空き確認 (デモ: 常にOK)"]
     ToolCoupon["get_coupon_discount<br/>割引率取得 (デモ: ABC=50%, XYZ=100%)"]
     ToolReserve["reserve_exam<br/>予約確定 + PDF生成"]
@@ -33,6 +35,8 @@ flowchart TD
     Frontend <-->|SRP認証・IDトークン発行| Cognito
     Frontend -->|ブラウザから直接<br/>Authorization: Bearer IDトークン| Runtime
     Runtime -->|IDトークンのnameクレーム=受験者名| Runtime
+    Runtime --> ToolVenues
+    Runtime --> ToolExams
     Runtime --> ToolCheck
     Runtime --> ToolCoupon
     Runtime --> ToolReserve
@@ -118,7 +122,9 @@ Amazon Bedrock AgentCore Runtime 上で動く Strands Agent です。`agentcore`
 
 - **受験者名の解決**: サインインユーザーの Cognito ID トークン（`Authorization` ヘッダー経由でエージ
   ェントに転送される）から `name` クレームを読み取り、受験者名として使用する。ユーザーに名前を聞かない。
-- **3つのツール**（`app/MyAgent/skills/reservation.py`）:
+- **5つのツール**（`app/MyAgent/skills/reservation.py`）:
+  - `list_venues` — 試験会場の一覧を返す（デモ実装: ハードコードされた3会場）
+  - `list_exams` — 受験可能な認定試験の一覧を返す（デモ実装: ハードコードされたAWS認定8種）
   - `check_availability` — 日時・試験名・会場名から空きを確認（デモ実装: 常に `OK`）
   - `get_coupon_discount` — クーポンコードから割引率を返す（デモ実装: `ABC`→50%, `XYZ`→100%）
   - `reserve_exam` — 予約を確定し、日本語フォント埋め込みの PDF を生成して S3 に格納、署名付き URL
