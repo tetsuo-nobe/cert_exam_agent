@@ -10,11 +10,11 @@ applications:
           commands:
             - npm run build
       artifacts:
-        # output: "export" による静的サイト生成。SSR compute は使わない。
-        baseDirectory: out
+        # Vite のビルド出力。素の静的サイトのため Amplify Hosting は自動的に
+        # 静的ホスティング(WEB platform)として扱う。SSR compute の判定に引っかからない。
+        baseDirectory: dist
         files:
           - '**/*'
       cache:
         paths:
           - node_modules/**/*
-          - .next/cache/**/*

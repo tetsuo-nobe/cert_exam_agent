@@ -1,13 +1,12 @@
-"use client";
-
 import { useState, useRef, useCallback } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { useAuthenticator } from "@aws-amplify/ui-react";
 import { fetchAuthSession } from "aws-amplify/auth";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import styles from "./page.module.css";
-import { consumeAgentEventStream } from "@/lib/parse-agent-stream";
-import { invokeAgent } from "@/lib/agent-client";
+import styles from "./App.module.css";
+import { consumeAgentEventStream } from "./lib/parse-agent-stream";
+import { invokeAgent } from "./lib/agent-client";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -31,7 +30,7 @@ function toolLabel(name: string): string {
 }
 
 // PDFの署名付きURLなど、外部リンクは新しいタブで開く
-function MarkdownLink({ href, children }: { href?: string; children?: React.ReactNode }) {
+function MarkdownLink({ href, children }: { href?: string; children?: ReactNode }) {
   return (
     <a href={href} target="_blank" rel="noopener noreferrer">
       {children}
@@ -39,7 +38,7 @@ function MarkdownLink({ href, children }: { href?: string; children?: React.Reac
   );
 }
 
-export default function ChatPage() {
+export default function App() {
   const { signOut, user } = useAuthenticator((context) => [context.user]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -48,7 +47,7 @@ export default function ChatPage() {
   const sessionIdRef = useRef<string>(crypto.randomUUID());
 
   const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
+    async (e: FormEvent) => {
       e.preventDefault();
       const prompt = input.trim();
       if (!prompt || isSending) return;
@@ -160,10 +159,7 @@ export default function ChatPage() {
                 </div>
               )}
               {m.role === "assistant" && !m.isStreaming ? (
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{ a: MarkdownLink }}
-                >
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: MarkdownLink }}>
                   {m.text}
                 </ReactMarkdown>
               ) : (

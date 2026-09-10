@@ -2,22 +2,21 @@
 //
 // AgentCore Runtime は Access-Control-Allow-Origin: * を返す(検証済み)ため、
 // サーバー側プロキシを介さずブラウザから直接呼び出せる。
-// Next.js は静的サイト(output: "export")としてビルドされ、Amplify Hosting は
-// 静的ホスティングとしてこのアプリを配信する(SSR compute のストリーミング未対応を回避)。
+// このアプリは Vite でビルドした静的サイトとして Amplify Hosting にデプロイされる。
 //
-// AgentCore Runtime の ARN・リージョンはビルド時に NEXT_PUBLIC_* としてブラウザに埋め込まれるが、
+// AgentCore Runtime の ARN・リージョンはビルド時に VITE_* としてブラウザに埋め込まれるが、
 // 呼び出しには Cognito が発行した JWT (Inbound Auth で aud クレームを検証) が必須なため、
 // ARN 自体を知られても呼び出しはできない。
 
-const AGENT_RUNTIME_ARN = process.env.NEXT_PUBLIC_AGENT_RUNTIME_ARN;
-const AWS_REGION = process.env.NEXT_PUBLIC_AGENT_RUNTIME_REGION ?? "us-east-1";
+const AGENT_RUNTIME_ARN = import.meta.env.VITE_AGENT_RUNTIME_ARN;
+const AWS_REGION = import.meta.env.VITE_AGENT_RUNTIME_REGION ?? "us-east-1";
 
 export const isAgentClientConfigured = Boolean(AGENT_RUNTIME_ARN);
 
 function buildInvocationUrl(): string {
   if (!AGENT_RUNTIME_ARN) {
     throw new Error(
-      "環境変数 NEXT_PUBLIC_AGENT_RUNTIME_ARN が設定されていません。"
+      "環境変数 VITE_AGENT_RUNTIME_ARN が設定されていません。"
     );
   }
   const escapedArn = encodeURIComponent(AGENT_RUNTIME_ARN);

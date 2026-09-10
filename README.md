@@ -12,7 +12,7 @@ PDF をダウンロードできます。
 cert_exam_agent/
 ├── backend/     ... AWS SAM: 認証(Cognito) と PDF格納用 S3 バケットを構築
 ├── examAgent/   ... Amazon Bedrock AgentCore Runtime 上で動く Strands Agent(エージェント本体)
-├── frontend/    ... Next.js: サインインしてエージェントとチャットする Web UI
+├── frontend/    ... Vite + React: サインインしてエージェントとチャットする Web UI
 └── amplify.yml  ... frontend を AWS Amplify Hosting にモノリポとしてデプロイするためのビルド設定
 ```
 
@@ -21,7 +21,7 @@ cert_exam_agent/
 ```mermaid
 flowchart TD
     User["ユーザー(ブラウザ)"]
-    Frontend["frontend (Next.js, 静的サイト)<br/>Authenticator (SRP)"]
+    Frontend["frontend (Vite+React, 静的サイト)<br/>Authenticator (SRP)"]
     Cognito["Cognito User Pool<br/>(backend/template.yaml)"]
     Runtime["AgentCore Runtime<br/>(examAgent/app/MyAgent)<br/>Inbound Auth: JWT / CORS対応"]
     ToolCheck["check_availability<br/>空き確認 (デモ: 常にOK)"]
@@ -41,44 +41,57 @@ flowchart TD
 ```
 
 フロントエンドはサーバー側プロキシを介さず、**ブラウザから AgentCore Runtime を直接呼び出します**
-（AgentCore Runtime は CORS に対応しているため）。これは AWS Amplify Hosting の Next.js SSR compute が
-ストリーミングレスポンスをサポートしないための回避策で、`frontend` は静的サイト
-（`output: "export"`）としてビルド・デプロイされます。
+（AgentCore Runtime は CORS に対応しているため）。`frontend` は Vite でビルドした素の静的サイトとして
+AWS Amplify Hosting にデプロイされ、サーバー機能（SSR/API Routes）は一切使いません。
 
 3つのサブプロジェクトは互いに直接参照し合わず、**設定値（バケット名、Cognito の ID など）を介して
 結び付いて**います。それぞれのデプロイ・設定手順は各フォルダの README を参照してください。
 
-### なぜ frontend は Next.js の SSR を使わないのか
+### なぜ Next.js を断念し Vite に切り替えたのか
 
-当初、`frontend` は Next.js の API Route（サーバー側）で AgentCore Runtime を呼び出し、その
-ストリーミング応答（SSE）をブラウザへ中継する構成だった。これは「ブラウザから直接 AWS のエンドポイント
-を呼ぶと CORS で失敗するはず」という前提に基づく設計だった。
+`frontend` は当初 Next.js で実装していたが、AWS Amplify Hosting へのデプロイで次の問題が段階的に
+発生し、最終的に Next.js の採用を断念して Vite + React に切り替えた。
 
-しかし AWS Amplify Hosting へ実際にデプロイしたところ、API Route が 500 エラーで失敗した。調査した
-結果、**AWS Amplify Hosting の Next.js SSR compute は、API Route からのストリーミングレスポンス
+**1. サーバー側プロキシのストリーミングが動かない**
+
+最初の実装は、Next.js の API Route（サーバー側）で AgentCore Runtime を呼び出し、その
+ストリーミング応答（SSE）をブラウザへ中継する構成だった。これは「ブラウザから直接 AWS の
+エンドポイントを呼ぶと CORS で失敗するはず」という未検証の前提に基づく設計だった。
+
+実際に Amplify Hosting へデプロイしたところ、API Route が 500 エラーで失敗した。調査した結果、
+**AWS Amplify Hosting の Next.js SSR compute は、API Route からのストリーミングレスポンス
 （`ReadableStream`）をサポートしていない**ことが判明した（AWS公式ドキュメントの
 [Amplify support for Next.js](https://docs.aws.amazon.com/amplify/latest/userguide/ssr-amplify-support.html)
 の Unsupported features に明記。ローカル開発環境や `next start` では問題なく動作するため、
-Amplify Hosting にデプロイするまで発覚しなかった)。
+Amplify Hosting にデプロイするまで発覚しなかった）。
+
+**2. CORS の前提を検証し直し、静的サイト化**
 
 そこで、そもそもサーバー側の中継が必要かどうかを検証した。AgentCore Runtime のエンドポイントに対して
-実際に CORS プリフライトリクエスト（`OPTIONS`）を送ったところ、次のレスポンスが返り、
-**ブラウザから直接呼び出せることが確認できた**。
+実際に CORS プリフライトリクエスト（`OPTIONS`）を送ったところ、`Access-Control-Allow-Origin: *`
+などが返り、**ブラウザから直接呼び出せることが確認できた**。この結果を踏まえ、サーバー側プロキシを
+廃止してブラウザから直接呼び出す構成に変更し、Next.js を `output: "export"`（静的サイト生成）に
+変更した。
 
-```
-Access-Control-Allow-Origin: *
-Access-Control-Allow-Headers: authorization,content-type,x-amzn-bedrock-agentcore-runtime-session-id
-Access-Control-Allow-Methods: POST
-```
+**3. Amplify のフレームワーク自動検出が Next.js を常に SSR と判定する**
 
-この検証結果を踏まえ、サーバー側プロキシ（API Route）を廃止し、**ブラウザから AgentCore Runtime を
-直接呼び出す**構成に変更した。これにより `frontend` はサーバー機能を一切使わない静的サイト
-（`output: "export"`）としてビルドでき、Amplify Hosting の SSR compute の制約を丸ごと回避できる。
+しかし、Amplify Hosting のアプリ作成ウィザードは `package.json` の内容から Next.js を検出すると、
+`amplify.yml` のビルド設定（`baseDirectory: out` など）とは無関係に「SSR (Web Compute)」のデプロイ
+パイプラインを自動的に選んでしまう。ビルド自体は静的サイトとして完全に成功していても、Amplify 側の
+デプロイ処理が SSR 用の成果物（`required-server-files.json`）を要求し、それが存在しないため
+`CustomerError: Can't find required-server-files.json` で失敗した。
 
-呼び出しには Cognito が発行した JWT（ID トークンの `aud` クレームを AgentCore Runtime の
-Inbound Auth が検証する）が必須のため、AgentCore Runtime の ARN がビルド時にブラウザ向け JS へ
-埋め込まれて誰でも読める状態になっても、それだけでは呼び出せない。この点はセキュリティ上のトレード
-オフとして許容している。
+回避策としては `aws amplify update-app --platform WEB` でプラットフォームを明示的に固定する方法が
+あるが、アプリを作成し直すたびに手動介入が必要になり、運用上の複雑さが増大した。
+
+**結論: Vite への切り替え**
+
+このアプリはブラウザから直接 AgentCore Runtime を呼ぶため、そもそもサーバー機能（SSR/API Routes）を
+一切必要としていない。Next.js を使う理由自体がなくなっていた。Vite は最初から素の静的ファイル
+（HTML/CSS/JS）を出力するだけのビルドツールで、サーバー機能を持たないため、Amplify Hosting から
+常に静的サイト（WEB platform）として認識される。ストリーミング表示・認証UI
+（`@aws-amplify/ui-react` の `Authenticator`）といった要件はそのまま維持しつつ、Next.js 特有の
+自動検出問題を構造的に回避できるため、`frontend` を Vite + React + TypeScript に置き換えた。
 
 ## サブプロジェクトの役割
 
@@ -117,10 +130,10 @@ Amazon Bedrock AgentCore Runtime 上で動く Strands Agent です。`agentcore`
 詳細は [`examAgent/README.md`](./examAgent/README.md) と [`examAgent/AGENTS.md`](./examAgent/AGENTS.md)
 を参照してください。
 
-### frontend/ — Next.js (Web UI)
+### frontend/ — Vite + React (Web UI)
 
-サインインしてエージェントとチャットするための Web アプリケーションです。静的サイト
-（`output: "export"`）としてビルドされ、サーバー機能は使いません。
+サインインしてエージェントとチャットするための Web アプリケーションです。素の静的サイトとして
+ビルドされ、サーバー機能は使いません（Next.js を採用していた経緯と断念した理由は上記参照）。
 
 - **認証**: `@aws-amplify/ui-react` の `Authenticator` コンポーネントで、SRP 認証によりサインイン/
   サインアップを行う（Cognito Hosted UI は使わない）。サインアップ時に受験者名（`name`属性）の入力を
@@ -145,7 +158,7 @@ Amazon Bedrock AgentCore Runtime 上で動く Strands Agent です。`agentcore`
    `EXAM_RESERVATION_BUCKET` に、Cognito の discovery URL / audience を Inbound Auth に、IAM ポリシー
    ARN を `additionalPolicies` に）を設定し、`agentcore deploy` でエージェントをデプロイする。
 3. **frontend** の環境変数（`.env.local`、Amplify Hosting ではコンソールの環境変数。すべて
-   `NEXT_PUBLIC_` 付き）に、1 で取得した Cognito の値と、2 で取得した AgentCore Runtime の
+   `VITE_` 付き）に、1 で取得した Cognito の値と、2 で取得した AgentCore Runtime の
    ARN・リージョンを設定してデプロイする（`amplify.yml` を使ったモノリポ構成、`appRoot: frontend`、
    静的サイトとしてビルド）。
 
@@ -155,4 +168,4 @@ Amazon Bedrock AgentCore Runtime 上で動く Strands Agent です。`agentcore`
 | --- | --- |
 | backend | AWS SAM, Amazon Cognito, Amazon S3, IAM |
 | examAgent | Amazon Bedrock AgentCore Runtime, Strands Agents SDK (Python), AgentCore Memory, reportlab (PDF生成) |
-| frontend | Next.js (App Router) + TypeScript, aws-amplify / @aws-amplify/ui-react, react-markdown |
+| frontend | Vite + React + TypeScript, aws-amplify / @aws-amplify/ui-react, react-markdown |
