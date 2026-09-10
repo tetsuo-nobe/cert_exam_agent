@@ -48,6 +48,38 @@ flowchart TD
 3つのサブプロジェクトは互いに直接参照し合わず、**設定値（バケット名、Cognito の ID など）を介して
 結び付いて**います。それぞれのデプロイ・設定手順は各フォルダの README を参照してください。
 
+### なぜ frontend は Next.js の SSR を使わないのか
+
+当初、`frontend` は Next.js の API Route（サーバー側）で AgentCore Runtime を呼び出し、その
+ストリーミング応答（SSE）をブラウザへ中継する構成だった。これは「ブラウザから直接 AWS のエンドポイント
+を呼ぶと CORS で失敗するはず」という前提に基づく設計だった。
+
+しかし AWS Amplify Hosting へ実際にデプロイしたところ、API Route が 500 エラーで失敗した。調査した
+結果、**AWS Amplify Hosting の Next.js SSR compute は、API Route からのストリーミングレスポンス
+（`ReadableStream`）をサポートしていない**ことが判明した（AWS公式ドキュメントの
+[Amplify support for Next.js](https://docs.aws.amazon.com/amplify/latest/userguide/ssr-amplify-support.html)
+の Unsupported features に明記。ローカル開発環境や `next start` では問題なく動作するため、
+Amplify Hosting にデプロイするまで発覚しなかった)。
+
+そこで、そもそもサーバー側の中継が必要かどうかを検証した。AgentCore Runtime のエンドポイントに対して
+実際に CORS プリフライトリクエスト（`OPTIONS`）を送ったところ、次のレスポンスが返り、
+**ブラウザから直接呼び出せることが確認できた**。
+
+```
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Headers: authorization,content-type,x-amzn-bedrock-agentcore-runtime-session-id
+Access-Control-Allow-Methods: POST
+```
+
+この検証結果を踏まえ、サーバー側プロキシ（API Route）を廃止し、**ブラウザから AgentCore Runtime を
+直接呼び出す**構成に変更した。これにより `frontend` はサーバー機能を一切使わない静的サイト
+（`output: "export"`）としてビルドでき、Amplify Hosting の SSR compute の制約を丸ごと回避できる。
+
+呼び出しには Cognito が発行した JWT（ID トークンの `aud` クレームを AgentCore Runtime の
+Inbound Auth が検証する）が必須のため、AgentCore Runtime の ARN がビルド時にブラウザ向け JS へ
+埋め込まれて誰でも読める状態になっても、それだけでは呼び出せない。この点はセキュリティ上のトレード
+オフとして許容している。
+
 ## サブプロジェクトの役割
 
 ### backend/ — AWS SAM (認証・ストレージ基盤)
