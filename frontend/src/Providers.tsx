@@ -1,12 +1,18 @@
 import type { ReactNode } from "react";
 import { Amplify } from "aws-amplify";
+import { I18n } from "aws-amplify/utils";
 import { Authenticator, Heading, useTheme, View } from "@aws-amplify/ui-react";
 import "@aws-amplify/ui-react/styles.css";
 import { amplifyConfig, isAmplifyConfigured } from "./lib/amplify-config";
+import { JA_VOCABULARIES } from "./translations/ja";
 
 if (isAmplifyConfigured) {
   Amplify.configure(amplifyConfig);
 }
+
+// Authenticator (Cognito サインインページ) の日本語化
+I18n.putVocabularies(JA_VOCABULARIES);
+I18n.setLanguage("ja");
 
 // サインイン/サインアップ画面のヘッダー（Amplify UI コンポーネントのカスタマイズ）
 function AuthHeader() {
