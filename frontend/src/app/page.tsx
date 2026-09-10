@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import styles from "./page.module.css";
 import { consumeAgentEventStream } from "@/lib/parse-agent-stream";
+import { invokeAgent } from "@/lib/agent-client";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -64,19 +65,7 @@ export default function ChatPage() {
           throw new Error("認証トークンが取得できませんでした。再度サインインしてください。");
         }
 
-        const res = await fetch("/api/agent/invoke", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({ prompt, sessionId: sessionIdRef.current }),
-        });
-
-        if (!res.ok || !res.body) {
-          const errBody = await res.json().catch(() => ({ error: `エラー (${res.status})` }));
-          throw new Error(errBody.error ?? `エラー (${res.status})`);
-        }
+        const stream = await invokeAgent(idToken, prompt, sessionIdRef.current);
 
         // アシスタントの返信用のメッセージを先に追加(ストリーミング中フラグを立てる)し、
         // 以降はテキストとツール利用状況を追記していく
@@ -85,7 +74,7 @@ export default function ChatPage() {
           { role: "assistant", text: "", isStreaming: true, toolCalls: [] },
         ]);
 
-        await consumeAgentEventStream(res.body, (event) => {
+        await consumeAgentEventStream(stream, (event) => {
           setMessages((prev) => {
             const next = [...prev];
             const last = next[next.length - 1];

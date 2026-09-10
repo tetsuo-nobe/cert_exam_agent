@@ -21,10 +21,9 @@ cert_exam_agent/
 ```mermaid
 flowchart TD
     User["ユーザー(ブラウザ)"]
-    Frontend["frontend (Next.js)<br/>Authenticator (SRP)"]
+    Frontend["frontend (Next.js, 静的サイト)<br/>Authenticator (SRP)"]
     Cognito["Cognito User Pool<br/>(backend/template.yaml)"]
-    ApiRoute["Next.js API Route<br/>/api/agent/invoke<br/>(サーバー側でIDトークンを中継)"]
-    Runtime["AgentCore Runtime<br/>(examAgent/app/MyAgent)<br/>Inbound Auth: JWT"]
+    Runtime["AgentCore Runtime<br/>(examAgent/app/MyAgent)<br/>Inbound Auth: JWT / CORS対応"]
     ToolCheck["check_availability<br/>空き確認 (デモ: 常にOK)"]
     ToolCoupon["get_coupon_discount<br/>割引率取得 (デモ: ABC=50%, XYZ=100%)"]
     ToolReserve["reserve_exam<br/>予約確定 + PDF生成"]
@@ -32,8 +31,7 @@ flowchart TD
 
     User -->|サインイン| Frontend
     Frontend <-->|SRP認証・IDトークン発行| Cognito
-    Frontend -->|Authorization: Bearer IDトークン| ApiRoute
-    ApiRoute -->|JWT転送| Runtime
+    Frontend -->|ブラウザから直接<br/>Authorization: Bearer IDトークン| Runtime
     Runtime -->|IDトークンのnameクレーム=受験者名| Runtime
     Runtime --> ToolCheck
     Runtime --> ToolCoupon
@@ -41,6 +39,11 @@ flowchart TD
     ToolReserve -->|PutObject / 署名付きURL発行| S3
     S3 -.->|署名付きURL経由でPDF表示| User
 ```
+
+フロントエンドはサーバー側プロキシを介さず、**ブラウザから AgentCore Runtime を直接呼び出します**
+（AgentCore Runtime は CORS に対応しているため）。これは AWS Amplify Hosting の Next.js SSR compute が
+ストリーミングレスポンスをサポートしないための回避策で、`frontend` は静的サイト
+（`output: "export"`）としてビルド・デプロイされます。
 
 3つのサブプロジェクトは互いに直接参照し合わず、**設定値（バケット名、Cognito の ID など）を介して
 結び付いて**います。それぞれのデプロイ・設定手順は各フォルダの README を参照してください。
@@ -84,7 +87,8 @@ Amazon Bedrock AgentCore Runtime 上で動く Strands Agent です。`agentcore`
 
 ### frontend/ — Next.js (Web UI)
 
-サインインしてエージェントとチャットするための Web アプリケーションです。
+サインインしてエージェントとチャットするための Web アプリケーションです。静的サイト
+（`output: "export"`）としてビルドされ、サーバー機能は使いません。
 
 - **認証**: `@aws-amplify/ui-react` の `Authenticator` コンポーネントで、SRP 認証によりサインイン/
   サインアップを行う（Cognito Hosted UI は使わない）。サインアップ時に受験者名（`name`属性）の入力を
@@ -92,9 +96,10 @@ Amazon Bedrock AgentCore Runtime 上で動く Strands Agent です。`agentcore`
 - **チャット UI**: エージェントの応答を SSE (Server-Sent Events) でストリーミング表示する。ツール呼び
   出し中は「空き状況を確認しています...」のように状況を表示し、完了後は Markdown を HTML に変換して
   表示する。受験予約確認書 PDF の署名付き URL はクリックすると新しいタブで直接開く。
-- **API Route (`/api/agent/invoke`)**: サーバー側でのみ実行され、ブラウザの ID トークンを
-  AgentCore Runtime の `/invocations` エンドポイントに中継する。AgentCore Runtime の ARN や
-  リージョンはブラウザに一切露出しない。
+- **AgentCore Runtime への直接呼び出し**: ブラウザから AgentCore Runtime の `/invocations`
+  エンドポイントへ直接 `fetch` する（`src/lib/agent-client.ts`）。AgentCore Runtime が
+  `Access-Control-Allow-Origin: *` を返すため CORS の問題は起きない。呼び出しには Cognito が発行した
+  JWT が必須のため、ARN がブラウザ側の JS に埋め込まれていても、それだけでは呼び出せない。
 
 詳細は [`frontend/README.md`](./frontend/README.md) を参照してください。
 
@@ -107,9 +112,10 @@ Amazon Bedrock AgentCore Runtime 上で動く Strands Agent です。`agentcore`
 2. **examAgent** の `agentcore/agentcore.json` に、1 で取得した値（バケット名を環境変数
    `EXAM_RESERVATION_BUCKET` に、Cognito の discovery URL / audience を Inbound Auth に、IAM ポリシー
    ARN を `additionalPolicies` に）を設定し、`agentcore deploy` でエージェントをデプロイする。
-3. **frontend** の環境変数（`.env.local`、Amplify Hosting ではコンソールの環境変数）に、1 で取得した
-   Cognito の値と、2 で取得した AgentCore Runtime の ARN・リージョンを設定してデプロイする
-   （`amplify.yml` を使ったモノリポ構成、`appRoot: frontend`）。
+3. **frontend** の環境変数（`.env.local`、Amplify Hosting ではコンソールの環境変数。すべて
+   `NEXT_PUBLIC_` 付き）に、1 で取得した Cognito の値と、2 で取得した AgentCore Runtime の
+   ARN・リージョンを設定してデプロイする（`amplify.yml` を使ったモノリポ構成、`appRoot: frontend`、
+   静的サイトとしてビルド）。
 
 ## 技術スタック
 

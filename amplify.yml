@@ -8,14 +8,10 @@ applications:
             - npm ci
         build:
           commands:
-            # Amplify Hosting はコンソールで設定した環境変数をビルド時の Node process には渡すが、
-            # SSR の実行時(API Routes など)には自動転送しない。
-            # Next.js が実行時にも読み込む .env.production に明示的に書き出す。
-            - env | grep -e NEXT_PUBLIC_ -e AGENT_RUNTIME_ >> .env.production
             - npm run build
       artifacts:
-        # Next.js の SSR (API Routes) を Amplify Hosting のコンピュートで動かすため .next を対象にする
-        baseDirectory: .next
+        # output: "export" による静的サイト生成。SSR compute は使わない。
+        baseDirectory: out
         files:
           - '**/*'
       cache:

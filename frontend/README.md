@@ -4,7 +4,7 @@
 
 ## 技術スタック
 
-- Next.js (App Router) + TypeScript
+- Next.js (App Router) + TypeScript。**静的サイト (`output: "export"`) としてビルドし、サーバー機能(SSR/API Routes)は使わない**
 - `aws-amplify` + `@aws-amplify/ui-react`（サインイン: Amplify UI の `Authenticator` コンポーネント、SRP認証。Cognito Hosted UI は使用しない）
 
 ## 構成
@@ -14,12 +14,11 @@ src/
 ├── app/
 │   ├── layout.tsx          Providers(Authenticator)でラップ
 │   ├── providers.tsx       Amplify初期化 + Authenticator設定
-│   ├── page.tsx            チャットUI本体
-│   └── api/agent/invoke/
-│       └── route.ts        AgentCore Runtimeへのプロキシ(SSE中継)。サーバー側のみで実行
+│   └── page.tsx            チャットUI本体
 └── lib/
-    ├── amplify-config.ts   Amplify設定(Cognito User Pool ID/Client ID)
-    └── parse-agent-stream.ts  SSEパース、テキスト差分の抽出
+    ├── amplify-config.ts     Amplify設定(Cognito User Pool ID/Client ID)
+    ├── agent-client.ts        AgentCore Runtime への直接呼び出し(ブラウザから)
+    └── parse-agent-stream.ts  SSEパース、テキスト差分・ツール利用状況の抽出
 ```
 
 ## 呼び出しフロー
@@ -27,25 +26,35 @@ src/
 ```
 ブラウザ (Authenticator でサインイン、SRP)
   → fetchAuthSession() で ID トークン取得
-  → fetch("/api/agent/invoke", { Authorization: Bearer <IDトークン>, prompt, sessionId })
-Next.js API Route (/api/agent/invoke, サーバー側)
-  → AgentCore Runtime の /invocations エンドポイントへ Authorization ヘッダーを転送
-  → 返ってきた SSE (text/event-stream) をそのままブラウザへ中継
-ブラウザ側で SSE をパースし、contentBlockDelta.delta.text を連結して表示
+  → AgentCore Runtime の /invocations エンドポイントへブラウザから直接 fetch
+    (Authorization: Bearer <IDトークン>)
+  → 返ってきた SSE (text/event-stream) をブラウザ側でパースして表示
 ```
 
-AgentCore Runtime の ARN・リージョンはサーバー側の環境変数にのみ保持し、ブラウザには一切露出しません。
+**サーバー側のプロキシは使わない。** AgentCore Runtime のエンドポイントは `Access-Control-Allow-Origin: *`
+を返すため、ブラウザから直接呼び出せる(検証済み)。呼び出しには Cognito が発行した JWT (Inbound Auth で
+`aud` クレームを検証)が必須なため、AgentCore Runtime の ARN 自体がブラウザに見えても、それだけでは
+呼び出せない。
+
+### なぜサーバー側プロキシをやめたか
+
+当初は Next.js の API Route (`/api/agent/invoke`) でサーバー側から AgentCore Runtime を呼び、SSE を
+中継する構成だった。しかし **AWS Amplify Hosting の Next.js SSR compute はストリーミングレスポンス
+(`ReadableStream`) を返す API Route をサポートしていない**ため、ローカルでは動作してもデプロイ後に
+500 エラーになった。AgentCore Runtime が CORS に対応していることを確認できたため、サーバーを介さず
+ブラウザから直接呼び出す構成に変更し、Amplify Hosting へは静的サイトとしてデプロイしている。
 
 ## 環境変数
 
 `.env.local.example` をコピーして `.env.local` を作成し、値を設定してください。
+**すべて `NEXT_PUBLIC_` プレフィックスが必要です**（ビルド時にブラウザ向けJSへ埋め込まれる値のため）。
 
 | 変数 | 用途 | 値の取得元 |
 | --- | --- | --- |
-| `NEXT_PUBLIC_COGNITO_USER_POOL_ID` | Cognito User Pool ID（ブラウザで使用） | `backend` の SAM Outputs `UserPoolId` |
-| `NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID` | Cognito User Pool Client ID（ブラウザで使用） | `backend` の SAM Outputs `UserPoolClientId` |
-| `AGENT_RUNTIME_ARN` | AgentCore Runtime の ARN（サーバー側のみ） | `agentcore status` または `agentcore/.cli/deployed-state.json` |
-| `AGENT_RUNTIME_REGION` | AgentCore Runtime のリージョン（サーバー側のみ） | 例: `us-east-1` |
+| `NEXT_PUBLIC_COGNITO_USER_POOL_ID` | Cognito User Pool ID | `backend` の SAM Outputs `UserPoolId` |
+| `NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID` | Cognito User Pool Client ID | `backend` の SAM Outputs `UserPoolClientId` |
+| `NEXT_PUBLIC_AGENT_RUNTIME_ARN` | AgentCore Runtime の ARN | `agentcore status` または `agentcore/.cli/deployed-state.json` |
+| `NEXT_PUBLIC_AGENT_RUNTIME_REGION` | AgentCore Runtime のリージョン | 例: `us-east-1` |
 
 ## 開発
 
@@ -62,6 +71,8 @@ npm run dev
 npm run build
 ```
 
+`out/` ディレクトリに静的ファイルが出力されます。
+
 ## 注意事項
 
 - 署名付きURL（受験予約確認書PDF）はチャット内のリンクをクリックすると新しいタブで直接開きます。ダウンロード用のBlob処理は行っていません。
@@ -77,11 +88,9 @@ Amplify Hosting でアプリを作成する際の手順:
 1. リポジトリを接続し、ブランチを選択する画面で **「モノリポである」（My app is a monorepo）** にチェックを入れる
 2. アプリのルートパスに `frontend` を指定する（これで `AMPLIFY_MONOREPO_APP_ROOT=frontend` が自動設定される）
 3. ビルド設定はリポジトリルートの `amplify.yml` が自動的に使われる（コンソール側の設定より優先される）
-4. Amplify Hosting のコンソールで環境変数を設定する（`.env.local` と同じ内容）:
+4. Amplify Hosting のコンソールで環境変数を設定する（`.env.local` と同じ内容、4つすべて `NEXT_PUBLIC_` 付き）:
    - `NEXT_PUBLIC_COGNITO_USER_POOL_ID`
    - `NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID`
-   - `AGENT_RUNTIME_ARN`
-   - `AGENT_RUNTIME_REGION`
-5. Next.js の SSR（`/api/agent/invoke` を含む API Routes）を使うため、Amplify Hosting は自動的にコンピュートホスティング（Next.js SSRアプリ向け）としてデプロイする
-
-デプロイ後、Cognito User Pool Client の設定（`backend/template.yaml`）に本番フロントエンドのオリジンを許可リストに追加する必要が出てくる場合があります（現状はSRP認証のみでCallbackURL等は使っていないため、追加設定は基本的に不要です）。
+   - `NEXT_PUBLIC_AGENT_RUNTIME_ARN`
+   - `NEXT_PUBLIC_AGENT_RUNTIME_REGION`
+5. 静的サイト（`output: "export"`）としてビルドされるため、Amplify Hosting は静的ホスティングとしてデプロイする（SSR compute は使わない）
