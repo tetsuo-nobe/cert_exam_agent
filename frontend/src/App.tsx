@@ -20,6 +20,8 @@ interface ChatMessage {
 
 // エージェントのツール名 → チャットに表示するわかりやすい日本語ラベル
 const TOOL_LABELS: Record<string, string> = {
+  list_venues: "会場一覧を確認しています",
+  list_exams: "受験可能な試験一覧を確認しています",
   check_availability: "空き状況を確認しています",
   get_coupon_discount: "クーポンの割引率を確認しています",
   reserve_exam: "受験予約を確定し、確認書を発行しています",

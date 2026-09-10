@@ -1,6 +1,8 @@
 """認定試験の受験予約に関するツール群。
 
 すべて Strands の @tool として公開する Python 関数として実装する。
+- list_venues: 試験会場の一覧を返す（デモ実装: ハードコードされた一覧）
+- list_exams: 受験可能な認定試験の一覧を返す（デモ実装: ハードコードされた一覧）
 - check_availability: 会場・試験・日時の空き確認（デモ実装: 常に OK）
 - get_coupon_discount: クーポンコードから割引率を返す（デモ実装）
 - reserve_exam: 予約を確定し、受験予約確認書 PDF を生成して S3 に格納し、署名付き URL を返す
@@ -38,6 +40,25 @@ _COUPON_TABLE = {
     "XYZ": 1.0,   # 100% 割引
 }
 
+# 試験会場の一覧（デモ実装: ハードコード）
+_VENUES = [
+    {"prefecture": "東京", "venue_name": "品川駅前テストセンター"},
+    {"prefecture": "大阪", "venue_name": "大阪駅前テストセンター"},
+    {"prefecture": "京都", "venue_name": "京都駅前テストセンター"},
+]
+
+# 受験可能な認定試験の一覧（デモ実装: ハードコード）
+_EXAMS = [
+    {"vendor": "AWS", "exam_name": "AWS Certified Cloud Practitioner", "exam_id": "CLF-C02"},
+    {"vendor": "AWS", "exam_name": "AWS Certified AI Practitioner", "exam_id": "AIF-C01"},
+    {"vendor": "AWS", "exam_name": "AWS Certified Solutions Architect - Associate", "exam_id": "SAA-C03"},
+    {"vendor": "AWS", "exam_name": "AWS Certified Developer - Associate", "exam_id": "DVA-C02"},
+    {"vendor": "AWS", "exam_name": "AWS Certified CloudOps Engineer - Associate", "exam_id": "SOA-C03"},
+    {"vendor": "AWS", "exam_name": "AWS Certified Solutions Architect - Professional", "exam_id": "SAP-C03"},
+    {"vendor": "AWS", "exam_name": "AWS Certified DevOps Engineer - Professional", "exam_id": "DOP-C02"},
+    {"vendor": "AWS", "exam_name": "AWS Certified Generative AI Developer - Professional", "exam_id": "AIP-C01"},
+]
+
 
 def _ensure_font_registered() -> str:
     """日本語フォントを reportlab に登録する。登録済みのフォント名を返す。"""
@@ -46,6 +67,26 @@ def _ensure_font_registered() -> str:
         pdfmetrics.registerFont(TTFont(_FONT_NAME, _FONT_PATH))
         _FONT_REGISTERED = True
     return _FONT_NAME
+
+
+@tool
+def list_venues() -> list[dict]:
+    """試験会場の一覧を返す。
+
+    Returns:
+        各会場の都道府県(prefecture)と会場名(venue_name)を持つ辞書のリスト。
+    """
+    return _VENUES
+
+
+@tool
+def list_exams() -> list[dict]:
+    """受験可能な認定試験の一覧を返す。
+
+    Returns:
+        各試験のベンダー(vendor)、認定試験名称(exam_name)、試験ID(exam_id)を持つ辞書のリスト。
+    """
+    return _EXAMS
 
 
 @tool

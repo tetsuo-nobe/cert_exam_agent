@@ -7,7 +7,13 @@ from strands.agent.conversation_manager.null_conversation_manager import NullCon
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from model.load import load_model
 from memory.session import get_memory_session_manager
-from skills.reservation import check_availability, get_coupon_discount, reserve_exam
+from skills.reservation import (
+    list_venues,
+    list_exams,
+    check_availability,
+    get_coupon_discount,
+    reserve_exam,
+)
 
 app = BedrockAgentCoreApp()
 log = app.logger
@@ -19,6 +25,11 @@ DEFAULT_SYSTEM_PROMPT = """
 # 役割
 ユーザーから「受験日時」「試験名」「会場名」「クーポンコード」を聞き取り、認定試験の受験予約を行います。
 受験者名は必ずシステムから渡されるサインインユーザー名（受験者名: の後に記載）を使用します。ユーザーに受験者名を尋ねてはいけません。
+
+# 会場・試験の案内
+- ユーザーが会場を尋ねてきたり、会場の選択に迷っている場合は、list_venues ツールで会場一覧を取得して案内する。
+- ユーザーが試験を尋ねてきたり、試験の選択に迷っている場合は、list_exams ツールで受験可能な試験一覧を取得して案内する。
+- ユーザーが指定した会場名・試験名が一覧に無い場合は、一覧から候補を示して確認を促す。
 
 # 予約の手順（必ずこの順序でツールを使用すること）
 1. 受験日時・試験名・会場名がそろったら、check_availability ツールで空きを確認する。
@@ -37,6 +48,8 @@ DEFAULT_SYSTEM_PROMPT = """
 
 # モデルが使用するツール群
 tools = [
+    list_venues,
+    list_exams,
     check_availability,
     get_coupon_discount,
     reserve_exam,
