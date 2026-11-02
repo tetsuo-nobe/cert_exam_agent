@@ -1,0 +1,87 @@
+
+# デモ用のAI エージェントを作成します。
+
+## エージェントの概要
+
+* 受験日時、試験名、会場名、クーポンコードから認定試験の受験予約を行う
+* 受験者名は、サインインしているユーザー名を使用する
+* 最終的に受験予約確認書を PDF で発行してユーザーはダウンロードできる
+
+## エージェントのツール
+
+* すべてPython の関数として作成する
+
+* ツール1
+  - 日時、試験名、会場名から空きがあれば OK を返す
+  - デモ実装なので、必ず、「OK」を返すダミー実装にする
+* ツール2
+  - クーポンコードから割引率を返す。
+  - 例えば 50% の場合は 0.5 と返す
+  - デモ実装なので、コードがABC なら 50%割引、XYZなら100%割引
+* ツール3
+  - 日時、試験名、会場名、受験者名、割引率から受験予約を行い、受験予約書をPDFで発行し、S3バケットに格納する
+  - S3バケットの署名付きURLを発行して返す
+  - フォントのファイルはをコピーしてC:\Users\tnobe\Desktop\exam_reserv_agent\fonts\NotoSansJP-VariableFont_wght.ttf使用
+
+
+## 適用技術
+
+*　エージェント
+  - Strands Agents SDK でPythonで実装
+  - Amazon BedrockCore Runtimeにダイレクトコードでデプロイ
+  - フロントエンドのアプリケーションから直接 Bedrock Runtimeにアクセス
+  - アクセスするには、Cognitoユーザープールで発行されたトークンが必要
+　- フロントエンドへのレスポンスは、ストリーミングで返す
+  - AWS SAMでデプロイする
+
+* エージェントにアクセスするフロントエンド
+  - JavaScriptのフレームワークを使わず軽量に実装する
+  - チャットのインターフェース
+  - エージェントからの回答をストリーミングで表示し、最終的にマークダウンをHTMLにして表示する
+  - AWS Amplify でデプロイする
+
+
+## デプロイ
+
+1. エージェント以外の AWS リソースは AWS SAM でデプロイ
+2. AgentCore Runtime へのデプロイは、agentcore CLI を使い手動でデプロイ
+3. フロントエンドは AWS Amplify ホスティングでデプロイ 
+
+
+テストユーザーは存在し、CONFIRMED（サインイン可能な状態）です。
+
+デモ
+https://main.d19ir16f9ok9d4.amplifyapp.com/
+
+
+メールアドレス: test-taro@example.com
+パスワード    : TestPass123!
+表示名(name)  : 山田太郎
+
+
+試験会場の情報を教えてください。
+
+受験可能な試験は何ですか？
+
+2026年12月1日の9:00から大阪駅前テストセンターでAWS SAA 試験を受けたいです。クーポンコードはABCです。
+
+
+
+都道府県,会場名
+東京,品川駅前テストセンター
+大阪,大阪駅前テストセンター
+京都,京都駅前テストセンター
+
+ベンダー,認定試験名称,試験ID
+AWS,AWS Certified Cloud Practitioner,CLF-C02
+AWS,AWS Certified AI Practitioner,AIF-C01
+AWS,AWS Certified Solutions Architect - Associate,SAA-C03
+AWS,AWS Certified Developer - Associate,DVA-C02
+AWS,AWS Certified CloudOps Engineer - Associate,SOA-C03
+AWS,AWS Certified Solutions Architect - Professional,SAP-C03
+AWS,AWS Certified DevOps Engineer - Professional,DOP-C02
+AWS,AWS Certified Generative AI Developer - Professional,AIP-C01
+
+
+
+
